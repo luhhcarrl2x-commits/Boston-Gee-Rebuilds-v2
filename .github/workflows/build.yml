@@ -170,6 +170,11 @@ jobs:
           else
             echo "BUILD_STATUS=FAILED" >> "$GITHUB_ENV"
           fi
+      
+      - name: Fix recovery output permissions
+        if: always()
+        run: |
+          sudo chmod -R u+rwX,go+rX /tmp/recovery/out/target/product/boston/recovery 2>/dev/null || true
 
       - name: Upload recovery artifacts
         if: always()
