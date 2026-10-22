@@ -8,82 +8,76 @@ on:
         required: true
         default: "PizzaG/android_device_motorola_boston"
         type: string
+
       device_branch:
         description: "Device tree branch"
         required: true
         default: "TWRP"
         type: string
+
       build_target:
-        description: "Recovery build target"
+        description: "Build target"
         required: true
         default: "recoveryimage"
         type: choice
         options:
           - recoveryimage
+          - bootimage
+          - vendorbootimage
 
 permissions:
   contents: write
 
-concurrency:
-  group: shrp-boston-${{ github.ref }}
-  cancel-in-progress: false
-
 jobs:
   build:
-    name: Build SHRP Reborn (boston)
+    name: Build SHRP Recovery
     runs-on: ubuntu-22.04
     timeout-minutes: 360
+
     env:
       DEVICE: boston
-      VENDOR: motorola
       RECOVERY_MANIFEST: https://github.com/SHRP-Reborn/manifest.git
       RECOVERY_BRANCH: shrp-12.1
+      TZ: UTC
 
     steps:
-      - name: Checkout device tree
+      - name: Checkout builder repository
         uses: actions/checkout@v4
-        with:
-          repository: ${{ inputs.device_tree }}
-          ref: ${{ inputs.device_branch }}
-          path: device_tree
-          fetch-depth: 1
 
-      - name: Validate device tree
+      - name: Validate device tree settings
         shell: bash
         run: |
           set -euo pipefail
-          for file in BoardConfig.mk AndroidProducts.mk twrp_boston.mk; do
-            if [[ ! -f "device_tree/$file" ]]; then
-              echo "::error::Expected device-tree file is missing: $file"
-              echo "The selected branch must contain the Boston TWRP device tree at its repository root."
-              exit 1
-            fi
-          done
-          echo "Device tree validated for Motorola Boston."
+          echo "Device: $DEVICE"
+          echo "Device tree: ${{ inputs.device_tree }}"
+          echo "Device branch: ${{ inputs.device_branch }}"
+          echo "Build target: ${{ inputs.build_target }}"
 
-      - name: Free runner disk space and install dependencies
+      - name: Install build dependencies
         shell: bash
         run: |
-          set -euxo pipefail
-          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/local/lib/android/sdk
+          set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends             bc bison build-essential ccache curl flex g++-multilib gcc-multilib             git git-lfs gnupg gperf imagemagick lib32readline-dev lib32z1-dev             libelf-dev liblz4-tool libncurses-dev libsdl1.2-dev libssl-dev             libxml2 libxml2-utils lzop openjdk-11-jdk pngcrush python3 python-is-python3             rsync schedtool squashfs-tools unzip xz-utils zip zlib1g-dev
-          sudo apt-get clean
-          df -h
-          java -version
-          git --version
+          sudo apt-get install -y \
+            bc bison build-essential ccache curl flex g++-multilib \
+            gcc-multilib git git-lfs gnupg gperf imagemagick \
+            lib32ncurses-dev lib32readline-dev lib32z1-dev \
+            liblz4-tool libncurses-dev libsdl1.2-dev libssl-dev \
+            libxml2 libxml2-utils lzop pngcrush rsync schedtool \
+            squashfs-tools unzip xz-utils zip zlib1g-dev \
+            python3 python-is-python3 openjdk-17-jdk
 
       - name: Install Repo tool
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p "$HOME/bin"
-          curl -fsSL https://storage.googleapis.com/git-repo-downloads/repo -o "$HOME/bin/repo"
+          curl -fsSL https://storage.googleapis.com/git-repo-downloads/repo \
+            -o "$HOME/bin/repo"
           chmod +x "$HOME/bin/repo"
           echo "$HOME/bin" >> "$GITHUB_PATH"
-          "$HOME/bin/repo" version
 
-      - name: Initialize and sync SHRP Reborn sources
+      - name: Initialize SHRP source
         shell: bash
         run: |
           set -euo pipefail
@@ -91,86 +85,55 @@ jobs:
           cd /tmp/recovery
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
-          "$HOME/bin/repo" init -u "$RECOVERY_MANIFEST" -b "$RECOVERY_BRANCH" --no-repo-verify --depth=1
-          "$HOME/bin/repo" sync -c --force-sync --no-tags --no-clone-bundle -j2
+          repo init -u "$RECOVERY_MANIFEST" -b "$RECOVERY_BRANCH"
 
-      - name: Install Boston device tree
+      - name: Sync SHRP source
         shell: bash
         run: |
           set -euo pipefail
           cd /tmp/recovery
-          mkdir -p "device/$VENDOR/$DEVICE"
-          cp -a "$GITHUB_WORKSPACE/device_tree/." "device/$VENDOR/$DEVICE/"
-          test -f "device/$VENDOR/$DEVICE/BoardConfig.mk"
-          test -f "device/$VENDOR/$DEVICE/AndroidProducts.mk"
-          test -f "device/$VENDOR/$DEVICE/twrp_boston.mk"
-          echo "Installed device tree:"
-          ls -la "device/$VENDOR/$DEVICE"
+          repo sync -c --no-clone-bundle --no-tags \
+            --optimized-fetch --prune -j2
 
-      
-      - name: Install legacy Python 2.7
+      - name: Clone device tree
         shell: bash
         run: |
           set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            build-essential zlib1g-dev libffi-dev \
-            libbz2-dev libreadline-dev libsqlite3-dev \
-            libncurses-dev libgdbm-dev liblzma-dev
+          mkdir -p /tmp/recovery/device/motorola
+          git clone \
+            --depth=1 \
+            --branch "${{ inputs.device_branch }}" \
+            "https://github.com/${{ inputs.device_tree }}.git" \
+            /tmp/recovery/device/motorola/boston
 
-          cd /tmp
-          curl -fsSLO \
-            https://www.python.org/ftp/python/2.7.18/Python-2.7.18.tgz
-          tar -xzf Python-2.7.18.tgz
-          cd Python-2.7.18
-
-          ./configure \
-            --prefix="$HOME/python2.7" \
-            --with-ensurepip=no
-
-          make -j2
-          make install
-
-          mkdir -p "$HOME/bin"
-          ln -sf "$HOME/python2.7/bin/python2.7" \
-            "$HOME/bin/python2.7"
-          echo "$HOME/bin" >> "$GITHUB_PATH"
-
-          python2.7 --version
-
-      - name: Build recovery image
+      - name: Check device tree files
         shell: bash
         run: |
-          set -eo pipefail
+          set -euo pipefail
+          cd /tmp/recovery/device/motorola/boston
+          echo "Device tree files:"
+          ls -la
+          if [[ ! -f BoardConfig.mk ]]; then
+            echo "::error::BoardConfig.mk is missing."
+            exit 1
+          fi
+
+      - name: Prepare output directory
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/recovery/out/target/product/boston
+          chmod -R u+rwX,go+rX /tmp/recovery/out || true
+
+      - name: Build SHRP recovery
+        shell: bash
+        run: |
+          set -euo pipefail
           cd /tmp/recovery
-          export ALLOW_MISSING_DEPENDENCIES=true
-          export LC_ALL=C
-          export USE_CCACHE=1
-          export CCACHE_EXEC=/usr/bin/ccache
-          ccache -M 10G
           source build/envsetup.sh
           lunch twrp_boston-eng
-          mka ${{ inputs.build_target }} -j2
+          mka "${{ inputs.build_target }}" -j2
 
-      - name: Collect build output
-        if: always()
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p "$GITHUB_WORKSPACE/output"
-          OUT_DIR="/tmp/recovery/out/target/product/$DEVICE"
-          if [[ -d "$OUT_DIR" ]]; then
-            find "$OUT_DIR" -maxdepth 1 -type f -name '*.img' -exec cp -v {} "$GITHUB_WORKSPACE/output/" \;
-            find "$OUT_DIR" -maxdepth 1 -type f \( -name '*.zip' -o -name '*.txt' \) -exec cp -v {} "$GITHUB_WORKSPACE/output/" \;
-          fi
-          echo "Output directory contents:"
-          ls -lah "$GITHUB_WORKSPACE/output"
-          if find "$GITHUB_WORKSPACE/output" -maxdepth 1 -type f -name '*.img' -print -quit | grep -q .; then
-            echo "BUILD_STATUS=SUCCESS" >> "$GITHUB_ENV"
-          else
-            echo "BUILD_STATUS=FAILED" >> "$GITHUB_ENV"
-          fi
-      
       - name: Fix recovery output permissions
         if: always()
         shell: bash
@@ -180,44 +143,58 @@ jobs:
 
           if sudo test -d "$OUT_DIR"; then
             sudo chmod -R a+rX "$OUT_DIR" || true
-            echo "Recovery output permissions fixed."
+            sudo find "$OUT_DIR" -type f \
+              \( -name "*.img" -o -name "*.zip" -o -name "*.txt" \) \
+              -exec chmod a+r {} \; || true
+            echo "Recovery output permissions checked."
           else
-            echo "Recovery output directory not found; skipping."
+            echo "Recovery output directory not found."
+          fi
+
+      - name: Collect build output
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          OUT_DIR="/tmp/recovery/out/target/product/boston"
+          DEST="$GITHUB_WORKSPACE/build-output"
+
+          mkdir -p "$DEST"
+          echo "BUILD_STATUS=FAILED" >> "$GITHUB_ENV"
+
+          if [[ -d "$OUT_DIR" ]]; then
+            sudo find "$OUT_DIR" -type f \
+              \( -name "*.img" -o -name "*.zip" -o -name "*.txt" \) \
+              -exec cp -f {} "$DEST/" \; || true
+          fi
+
+          if find "$DEST" -maxdepth 1 -type f \
+            \( -name "*.img" -o -name "*.zip" \) | grep -q .; then
+            echo "BUILD_STATUS=SUCCESS" >> "$GITHUB_ENV"
+            echo "Build output collected:"
+            ls -lh "$DEST"
+          else
+            echo "No recovery image or ZIP was found."
+            echo "Available output files:"
+            find "$OUT_DIR" -maxdepth 4 -type f 2>/dev/null | head -100 || true
           fi
 
       - name: Upload recovery artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: SHRP-Reborn-boston-${{ github.run_number }}
-          path: output/*
+          name: SHRP-Reborn-Boston
+          path: build-output/
           if-no-files-found: warn
-          retention-days: 30
+          retention-days: 14
 
       - name: Upload build logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: SHRP-Reborn-boston-logs-${{ github.run_number }}
+          name: SHRP-Build-Logs
           path: |
-            /tmp/recovery/out/**/*.log
-            /tmp/recovery/out/target/product/boston/*.txt
+            /tmp/recovery/.repo/
+            /tmp/recovery/out/target/product/boston/*.log
           if-no-files-found: ignore
           retention-days: 7
-
-      - name: Create GitHub release
-        if: success() && env.BUILD_STATUS == 'SUCCESS'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: shrp-boston-${{ github.run_number }}
-          name: SHRP Reborn - Boston - Build ${{ github.run_number }}
-          body: |
-            Unofficial SHRP Reborn recovery build for Motorola Moto G Stylus 5G (2024), codename boston.
-
-            Device tree: ${{ inputs.device_tree }} @ ${{ inputs.device_branch }}
-            SHRP manifest branch: shrp-12.1
-
-            Caution: This image is experimental and has not been device-tested by this workflow. Do not flash unless you understand the risks. If supported, test with fastboot boot first and keep a known-good stock firmware package available.
-          files: output/*.img
-          draft: false
-          prerelease: true
