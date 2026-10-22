@@ -128,7 +128,8 @@ jobs:
       - name: Build SHRP recovery
         shell: bash
         run: |
-          set -euo pipefail
+          # Android envsetup scripts may reference unset variables.
+          set -eo pipefail
           cd /tmp/recovery
           source build/envsetup.sh
           lunch twrp_boston-eng
