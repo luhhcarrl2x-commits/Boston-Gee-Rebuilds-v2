@@ -107,6 +107,37 @@ jobs:
           echo "Installed device tree:"
           ls -la "device/$VENDOR/$DEVICE"
 
+      
+      - name: Install legacy Python 2.7
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential zlib1g-dev libffi-dev \
+            libbz2-dev libreadline-dev libsqlite3-dev \
+            libncurses-dev libgdbm-dev liblzma-dev
+
+          cd /tmp
+          curl -fsSLO \
+            https://www.python.org/ftp/python/2.7.18/Python-2.7.18.tgz
+          tar -xzf Python-2.7.18.tgz
+          cd Python-2.7.18
+
+          ./configure \
+            --prefix="$HOME/python2.7" \
+            --with-ensurepip=no
+
+          make -j2
+          make install
+
+          mkdir -p "$HOME/bin"
+          ln -sf "$HOME/python2.7/bin/python2.7" \
+            "$HOME/bin/python2.7"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+
+          python2.7 --version
+
       - name: Build recovery image
         shell: bash
         run: |
