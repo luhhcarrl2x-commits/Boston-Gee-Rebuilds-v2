@@ -173,15 +173,17 @@ jobs:
       
       - name: Fix recovery output permissions
         if: always()
+        shell: bash
         run: |
-          sudo chmod -R u+rwX,go+rX /tmp/recovery/out/target/product/boston/recovery 2>/dev/null || true
+          set -euo pipefail
+          OUT_DIR="/tmp/recovery/out/target/product/boston"
 
-            - name: Fix recovery artifact permissions
-        if: always()
-        run: |
-          sudo chmod -R a+rX \
-            /tmp/recovery/out/target/product/boston/recovery/root \
-            2>/dev/null || true
+          if sudo test -d "$OUT_DIR"; then
+            sudo chmod -R a+rX "$OUT_DIR" || true
+            echo "Recovery output permissions fixed."
+          else
+            echo "Recovery output directory not found; skipping."
+          fi
 
       - name: Upload recovery artifacts
         if: always()
