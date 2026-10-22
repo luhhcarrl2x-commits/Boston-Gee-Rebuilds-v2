@@ -176,6 +176,13 @@ jobs:
         run: |
           sudo chmod -R u+rwX,go+rX /tmp/recovery/out/target/product/boston/recovery 2>/dev/null || true
 
+            - name: Fix recovery artifact permissions
+        if: always()
+        run: |
+          sudo chmod -R a+rX \
+            /tmp/recovery/out/target/product/boston/recovery/root \
+            2>/dev/null || true
+
       - name: Upload recovery artifacts
         if: always()
         uses: actions/upload-artifact@v4
