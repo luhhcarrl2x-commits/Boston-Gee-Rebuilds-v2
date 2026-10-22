@@ -110,7 +110,7 @@ jobs:
       - name: Build recovery image
         shell: bash
         run: |
-          set -euo pipefail
+          set -eo pipefail
           cd /tmp/recovery
           export ALLOW_MISSING_DEPENDENCIES=true
           export LC_ALL=C
