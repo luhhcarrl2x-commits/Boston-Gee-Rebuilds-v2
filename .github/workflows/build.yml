@@ -3,10 +3,10 @@ name: Universal Recovery Builder
 on:
   workflow_dispatch:
     inputs:
-      device_tree:
-        description: Device Tree URL (Your GitHub/GitLab Repo)
+        device_tree:
+        description: Device Tree Repository (owner/repo)
         required: true
-        default: https://github.com/username/device_tree_repo.git
+        default: PizzaG/android_device_motorola_boston
 
       device_branch:
         description: Device Tree Branch
