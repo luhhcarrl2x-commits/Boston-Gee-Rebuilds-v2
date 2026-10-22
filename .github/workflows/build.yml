@@ -1,437 +1,178 @@
-name: Universal Recovery Builder
+name: Build SHRP Reborn for Moto G Stylus 5G (2024)
 
 on:
   workflow_dispatch:
     inputs:
-        device_tree:
-        description: Device Tree Repository (owner/repo)
+      device_tree:
+        description: "Device tree repository (owner/repo)"
         required: true
-        default: PizzaG/android_device_motorola_boston
-
+        default: "PizzaG/android_device_motorola_boston"
+        type: string
       device_branch:
-        description: Device Tree Branch
+        description: "Device tree branch"
         required: true
-        default: main
-
-      recovery_type:
-        description: Recovery Type
-        required: true
-        default: orangefox-r12
-        type: choice
-        options:
-          - orangefox-r12
-          - orangefox-r11
-          - twrp-ab
-          - shrp
-          - pbrp
-          - twrp-legacy
-          - redwolf
-          - foxr11
-          - orangefox-beta
-
-      android_version:
-        description: Target Android Version
-        required: true
-        default: '15'
-        type: choice
-        options:
-          - '16'
-          - '15'
-          - '14'
-          - '13'
-          - '12'
-          - '11'
-          - '10'
-          - '9'
-
+        default: "TWRP"
+        type: string
       build_target:
-        description: Build Target
+        description: "Recovery build target"
         required: true
-        default: recoveryimage
+        default: "recoveryimage"
         type: choice
         options:
           - recoveryimage
-          - vendorbootimage
-          - bootimage
 
-      enable_telegram:
-        description: Send Telegram Notification?
-        required: true
-        default: true
-        type: boolean
+permissions:
+  contents: write
 
-      telegram_username:
-        description: Telegram Username (@username) - Optional
-        required: false
-        default: ''
-
-      auto_release:
-        description: Create Release?
-        required: true
-        default: true
-        type: boolean
-
-env:
-  TZ: Africa/Cairo
+concurrency:
+  group: shrp-boston-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
   build:
-    name: Build Recovery
-    runs-on: ubuntu-latest
-    timeout-minutes: 120
+    name: Build SHRP Reborn (boston)
+    runs-on: ubuntu-22.04
+    timeout-minutes: 360
+    env:
+      DEVICE: boston
+      VENDOR: motorola
+      RECOVERY_MANIFEST: https://github.com/SHRP-Reborn/manifest.git
+      RECOVERY_BRANCH: shrp-12.1
 
     steps:
-    - name: Set Build Date
-      id: date
-      run: echo "BUILD_DATE=$(date +'%Y%m%d-%H%M')" >> $GITHUB_ENV
+      - name: Checkout device tree
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ inputs.device_tree }}
+          ref: ${{ inputs.device_branch }}
+          path: device_tree
+          fetch-depth: 1
 
-    - name: Show Build Configuration
-      run: |
-        echo "=========================================="
-        echo "  Universal Recovery Builder"
-        echo "=========================================="
-        echo "  Device Tree: ${{ github.event.inputs.device_tree }}"
-        echo "  Branch: ${{ github.event.inputs.device_branch }}"
-        echo "  Recovery: ${{ github.event.inputs.recovery_type }}"
-        echo "  Android: ${{ github.event.inputs.android_version }}"
-        echo "  Target: ${{ github.event.inputs.build_target }}"
-        echo "  Date: ${{ env.BUILD_DATE }}"
-        echo "=========================================="
-
-    - name: Checkout Device Tree
-      uses: actions/checkout@v4
-      with:
-        repository: ${{ github.event.inputs.device_tree }}
-        ref: ${{ github.event.inputs.device_branch }}
-        path: device_tree
-        fetch-depth: 1
-
-    - name: Install Dependencies
-      run: |
-        sudo apt-get update -qq
-        sudo apt-get install -y -qq           git-core gnupg flex bison build-essential zip curl           zlib1g-dev gcc-multilib g++-multilib libc6-dev-i386  libncurses-dev          -dev x11proto-core-dev           libx11-dev lib32z1-dev libgl1-mesa-dev libxml2-utils           xsltproc unzip fontconfig python3 python3-pip ccache bc           libssl-dev imagemagick schedtool
-        ccache -M 20G
-
-    - name: Install Repo Tool
-      run: |
-        mkdir -p ~/bin
-        curl -s https://storage.googleapis.com/git-repo-downloads/repo > ~/bin/repo
-        chmod a+x ~/bin/repo
-        echo "$HOME/bin" >> $GITHUB_PATH
-        export PATH="$HOME/bin:$PATH"
-        repo --version
-
-    - name: Sync Recovery Sources
-      id: sync
-      run: |
-        export PATH="$HOME/bin:$PATH"
-        mkdir -p /tmp/recovery
-        cd /tmp/recovery
-
-        RECOVERY="${{ github.event.inputs.recovery_type }}"
-
-        # Set manifest based on recovery type
-        case $RECOVERY in
-          orangefox-r12)
-            MANIFEST="https://gitlab.com/OrangeFox/misc/scripts.git"
-            BRANCH="master"
-            ;;
-          orangefox-r11)
-            MANIFEST="https://gitlab.com/OrangeFox/misc/scripts.git"
-            BRANCH="master"
-            ;;
-          orangefox-beta)
-            MANIFEST="https://gitlab.com/OrangeFox/misc/scripts.git"
-            BRANCH="master"
-            ;;
-          twrp-ab)
-            MANIFEST="https://github.com/minimal-manifest-twrp/platform_manifest_twrp_aosp.git"
-            BRANCH="twrp-12.1"
-            ;;
-          shrp)
-            MANIFEST="https://github.com/SHRP/platform_manifest_twrp_omni.git"
-            BRANCH="shrp-12.1"
-            ;;
-          pbrp)
-            MANIFEST="https://github.com/PitchBlackRecoveryProject/manifest_pb.git"
-            BRANCH="pb-12.1"
-            ;;
-          twrp-legacy)
-            MANIFEST="https://github.com/minimal-manifest-twrp/platform_manifest_twrp_omni.git"
-            BRANCH="twrp-9.0"
-            ;;
-          redwolf)
-            MANIFEST="https://github.com/minimal-manifest-twrp/platform_manifest_twrp_omni.git"
-            BRANCH="twrp-9.0"
-            ;;
-          foxr11)
-            MANIFEST="https://github.com/minimal-manifest-twrp/platform_manifest_twrp_aosp.git"
-            BRANCH="twrp-11"
-            ;;
-          *)
-            MANIFEST="https://github.com/minimal-manifest-twrp/platform_manifest_twrp_aosp.git"
-            BRANCH="twrp-12.1"
-            ;;
-        esac
-
-        echo "=========================================="
-        echo "  Recovery: $RECOVERY"
-        echo "  Manifest: $MANIFEST"
-        echo "  Branch: $BRANCH"
-        echo "=========================================="
-
-        git config --global user.name "GitHub Actions"
-        git config --global user.email "actions@github.com"
-        repo init -u "$MANIFEST" -b "$BRANCH" --no-repo-verify --depth=1
-        repo sync -c --force-sync --no-tags --no-clone-bundle -j$(nproc --all) ||         repo sync -c --force-sync --no-tags --no-clone-bundle -j$(nproc --all)
-
-    - name: Setup Device Tree
-      run: |
-        cd /tmp/recovery
-
-        # Extract device info
-        DEVICE=$(find device_tree/device -maxdepth 2 -mindepth 2 -type d 2>/dev/null | head -1 | xargs basename 2>/dev/null || echo "unknown")
-        VENDOR=$(find device_tree/device -maxdepth 1 -mindepth 1 -type d 2>/dev/null | head -1 | xargs basename 2>/dev/null || echo "unknown")
-
-        if [ "$DEVICE" = "unknown" ] || [ "$VENDOR" = "unknown" ]; then
-          # Try alternative paths
-          DEVICE=$(ls device_tree/ 2>/dev/null | grep -v "README\|\.git" | head -1 || echo "unknown")
-          VENDOR="infinix"
-        fi
-
-        echo "DEVICE=$DEVICE" >> $GITHUB_ENV
-        echo "VENDOR=$VENDOR" >> $GITHUB_ENV
-
-        mkdir -p device/$VENDOR
-        rm -rf device/$VENDOR/$DEVICE
-
-        # Copy device tree
-        if [ -d "device_tree/device/$VENDOR/$DEVICE" ]; then
-          cp -r device_tree/device/$VENDOR/$DEVICE device/$VENDOR/$DEVICE
-        elif [ -d "device_tree/$VENDOR/$DEVICE" ]; then
-          cp -r device_tree/$VENDOR/$DEVICE device/$VENDOR/$DEVICE
-        else
-          cp -r device_tree/* device/$VENDOR/$DEVICE 2>/dev/null ||           cp -r device_tree device/$VENDOR/$DEVICE
-        fi
-
-        ls -la device/$VENDOR/$DEVICE/ || true
-
-    - name: Clone Recovery Vendor
-      run: |
-        cd /tmp/recovery
-        RECOVERY="${{ github.event.inputs.recovery_type }}"
-
-        case $RECOVERY in
-          orangefox-r12|orangefox-r11|orangefox-beta)
-            git clone --depth=1 https://gitlab.com/OrangeFox/vendor/recovery.git vendor/recovery 2>/dev/null || true
-            if [ -d vendor/recovery ]; then
-              cd vendor/recovery
-              git checkout fox_12.1 2>/dev/null || git checkout fox_11 2>/dev/null || true
+      - name: Validate device tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          for file in BoardConfig.mk AndroidProducts.mk twrp_boston.mk; do
+            if [[ ! -f "device_tree/$file" ]]; then
+              echo "::error::Expected device-tree file is missing: $file"
+              echo "The selected branch must contain the Boston TWRP device tree at its repository root."
+              exit 1
             fi
-            ;;
-          shrp)
-            git clone --depth=1 https://github.com/SHRP/shrp_vendor.git vendor/shrp 2>/dev/null || true
-            ;;
-          pbrp)
-            git clone --depth=1 https://github.com/PitchBlackRecoveryProject/vendor_pb.git vendor/pb 2>/dev/null || true
-            ;;
-        esac
+          done
+          echo "Device tree validated for Motorola Boston."
 
-    - name: Fix Device Tree Issues
-      run: |
-        cd /tmp/recovery
-        VENDOR="${{ env.VENDOR }}"
-        DEVICE="${{ env.DEVICE }}"
-        DT_PATH="device/$VENDOR/$DEVICE"
+      - name: Free runner disk space and install dependencies
+        shell: bash
+        run: |
+          set -euxo pipefail
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/local/lib/android/sdk
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends             bc bison build-essential ccache curl flex g++-multilib gcc-multilib             git git-lfs gnupg gperf imagemagick lib32readline-dev lib32z1-dev             libelf-dev liblz4-tool libncurses-dev libsdl1.2-dev libssl-dev             libxml2 libxml2-utils lzop openjdk-11-jdk pngcrush python3 python-is-python3             rsync schedtool squashfs-tools unzip xz-utils zip zlib1g-dev
+          sudo apt-get clean
+          df -h
+          java -version
+          git --version
 
-        echo "Fixing device tree at: $DT_PATH"
+      - name: Install Repo tool
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/bin"
+          curl -fsSL https://storage.googleapis.com/git-repo-downloads/repo -o "$HOME/bin/repo"
+          chmod +x "$HOME/bin/repo"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+          "$HOME/bin/repo" version
 
-        # Fix vendorsetup.sh
-        if [ -f "$DT_PATH/vendorsetup.sh" ]; then
-          echo "# Fixed by Universal Recovery Builder" > "$DT_PATH/vendorsetup.sh"
-          echo "# COMMON_LUNCH_CHOICES moved to AndroidProducts.mk" >> "$DT_PATH/vendorsetup.sh"
-        fi
+      - name: Initialize and sync SHRP Reborn sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/recovery
+          cd /tmp/recovery
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          "$HOME/bin/repo" init -u "$RECOVERY_MANIFEST" -b "$RECOVERY_BRANCH" --no-repo-verify --depth=1
+          "$HOME/bin/repo" sync -c --force-sync --no-tags --no-clone-bundle -j2
 
-        # Fix AndroidProducts.mk
-        if [ -f "$DT_PATH/AndroidProducts.mk" ]; then
-          if ! grep -q "COMMON_LUNCH_CHOICES" "$DT_PATH/AndroidProducts.mk"; then
-            echo "" >> "$DT_PATH/AndroidProducts.mk"
-            echo "COMMON_LUNCH_CHOICES := \" >> "$DT_PATH/AndroidProducts.mk"
-            echo "    omni_${DEVICE}-eng \" >> "$DT_PATH/AndroidProducts.mk"
-            echo "    omni_${DEVICE}-userdebug \" >> "$DT_PATH/AndroidProducts.mk"
-            echo "    omni_${DEVICE}-user" >> "$DT_PATH/AndroidProducts.mk"
+      - name: Install Boston device tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/recovery
+          mkdir -p "device/$VENDOR/$DEVICE"
+          cp -a "$GITHUB_WORKSPACE/device_tree/." "device/$VENDOR/$DEVICE/"
+          test -f "device/$VENDOR/$DEVICE/BoardConfig.mk"
+          test -f "device/$VENDOR/$DEVICE/AndroidProducts.mk"
+          test -f "device/$VENDOR/$DEVICE/twrp_boston.mk"
+          echo "Installed device tree:"
+          ls -la "device/$VENDOR/$DEVICE"
+
+      - name: Build recovery image
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd /tmp/recovery
+          export ALLOW_MISSING_DEPENDENCIES=true
+          export LC_ALL=C
+          export USE_CCACHE=1
+          export CCACHE_EXEC=/usr/bin/ccache
+          ccache -M 10G
+          source build/envsetup.sh
+          lunch twrp_boston-eng
+          mka ${{ inputs.build_target }} -j2
+
+      - name: Collect build output
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$GITHUB_WORKSPACE/output"
+          OUT_DIR="/tmp/recovery/out/target/product/$DEVICE"
+          if [[ -d "$OUT_DIR" ]]; then
+            find "$OUT_DIR" -maxdepth 1 -type f -name '*.img' -exec cp -v {} "$GITHUB_WORKSPACE/output/" \;
+            find "$OUT_DIR" -maxdepth 1 -type f \( -name '*.zip' -o -name '*.txt' \) -exec cp -v {} "$GITHUB_WORKSPACE/output/" \;
           fi
-          cat "$DT_PATH/AndroidProducts.mk"
-        fi
-
-    - name: Build Recovery
-      id: build_step
-      run: |
-        cd /tmp/recovery
-        source build/envsetup.sh || true
-
-        export ALLOW_MISSING_DEPENDENCIES=true
-        export LC_ALL=C
-        export USE_CCACHE=1
-        export CCACHE_EXEC=/usr/bin/ccache
-        ccache -M 20G
-
-        RECOVERY="${{ github.event.inputs.recovery_type }}"
-
-        # Recovery-specific flags
-        case $RECOVERY in
-          orangefox-r12|orangefox-beta)
-            export FOX_BUILD_DEVICE="${{ env.DEVICE }}"
-            export FOX_VARIANT="R12.0.1_BETA"
-            export FOX_USE_LZMA_COMPRESSION=1
-            export FOX_ENABLE_APP_MANAGER=1
-            export OF_SKIP_FBE_DECRYPTION=0
-            export OF_PATCH_AVB20=1
-            ;;
-          orangefox-r11)
-            export FOX_BUILD_DEVICE="${{ env.DEVICE }}"
-            export FOX_VARIANT="R11.1"
-            ;;
-          shrp)
-            export SHRP_BUILD_DEVICE="${{ env.DEVICE }}"
-            export SHRP_BUILD_TYPE="UNOFFICIAL"
-            ;;
-          pbrp)
-            export PB_BUILD_DEVICE="${{ env.DEVICE }}"
-            export PB_BUILD_TYPE="UNOFFICIAL"
-            ;;
-        esac
-
-        echo "Running lunch for device: ${{ env.DEVICE }}"
-        lunch omni_${{ env.DEVICE }}-eng 2>/dev/null ||         lunch twrp_${{ env.DEVICE }}-eng 2>/dev/null ||         lunch omni_${{ env.DEVICE }}-userdebug 2>/dev/null || true
-
-        echo "Building target: ${{ github.event.inputs.build_target }}"
-        mka adbd ${{ github.event.inputs.build_target }} || true
-
-    - name: Check Output
-      id: check_output
-      run: |
-        OUT_DIR="/tmp/recovery/out/target/product/${{ env.DEVICE }}"
-        echo "Checking output in: $OUT_DIR"
-        ls -la "$OUT_DIR" 2>/dev/null || true
-
-        mkdir -p $GITHUB_WORKSPACE/output
-
-        # Copy all img files
-        for img in "$OUT_DIR"/*.img 2>/dev/null; do
-          if [ -f "$img" ]; then
-            cp -v "$img" "$GITHUB_WORKSPACE/output/"
+          echo "Output directory contents:"
+          ls -lah "$GITHUB_WORKSPACE/output"
+          if find "$GITHUB_WORKSPACE/output" -maxdepth 1 -type f -name '*.img' -print -quit | grep -q .; then
+            echo "BUILD_STATUS=SUCCESS" >> "$GITHUB_ENV"
+          else
+            echo "BUILD_STATUS=FAILED" >> "$GITHUB_ENV"
           fi
-        done
 
-        # Also search in other locations
-        find /tmp/recovery/out -name "*.img" -type f 2>/dev/null | while read img; do
-          cp -v "$img" "$GITHUB_WORKSPACE/output/" 2>/dev/null || true
-        done
+      - name: Upload recovery artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: SHRP-Reborn-boston-${{ github.run_number }}
+          path: output/*
+          if-no-files-found: warn
+          retention-days: 30
 
-        ls -la $GITHUB_WORKSPACE/output/ 2>/dev/null || true
+      - name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: SHRP-Reborn-boston-logs-${{ github.run_number }}
+          path: |
+            /tmp/recovery/out/**/*.log
+            /tmp/recovery/out/target/product/boston/*.txt
+          if-no-files-found: ignore
+          retention-days: 7
 
-        OUTPUT_LIST=$(ls $GITHUB_WORKSPACE/output/ 2>/dev/null | tr \'\n\' \' \')
-        echo "OUTPUT_FILES=$OUTPUT_LIST" >> $GITHUB_ENV
+      - name: Create GitHub release
+        if: success() && env.BUILD_STATUS == 'SUCCESS'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: shrp-boston-${{ github.run_number }}
+          name: SHRP Reborn - Boston - Build ${{ github.run_number }}
+          body: |
+            Unofficial SHRP Reborn recovery build for Motorola Moto G Stylus 5G (2024), codename boston.
 
-        if [ -z "$OUTPUT_LIST" ]; then
-          echo "BUILD_STATUS=FAILED" >> $GITHUB_ENV
-        else
-          echo "BUILD_STATUS=SUCCESS" >> $GITHUB_ENV
-        fi
+            Device tree: ${{ inputs.device_tree }} @ ${{ inputs.device_branch }}
+            SHRP manifest branch: shrp-12.1
 
-    - name: Upload Recovery
-      if: env.BUILD_STATUS == 'SUCCESS'
-      uses: actions/upload-artifact@v4
-      with:
-        name: Recovery-${{ github.event.inputs.recovery_type }}-${{ env.DEVICE }}-${{ env.BUILD_DATE }}
-        path: /tmp/recovery/out/target/product/${{ env.DEVICE }}/*.img
-        retention-days: 30
-
-    - name: Upload Logs
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: Logs-${{ github.event.inputs.recovery_type }}-${{ env.DEVICE }}-${{ env.BUILD_DATE }}
-        path: |
-          /tmp/recovery/out/**/*.log
-          /tmp/recovery/**/*.log
-        retention-days: 7
-
-    - name: Create Release
-      if: github.event.inputs.auto_release == 'true' && env.BUILD_STATUS == 'SUCCESS'
-      uses: softprops/action-gh-release@v1
-      with:
-        tag_name: ${{ github.event.inputs.recovery_type }}-${{ env.DEVICE }}-${{ env.BUILD_DATE }}
-        name: ${{ github.event.inputs.recovery_type }} for ${{ env.DEVICE }}
-        body: |
-          ## Universal Recovery Builder
-
-          **Recovery:** ${{ github.event.inputs.recovery_type }}
-          **Device:** ${{ env.DEVICE }}
-          **Android:** ${{ github.event.inputs.android_version }}
-          **Target:** ${{ github.event.inputs.build_target }}
-
-          ### Warning
-          - This is an UNOFFICIAL build
-          - Always backup before flashing
-          - Test with `fastboot boot` first
-
-          ### Download
-          Check the Artifacts section for recovery image
-
-          ### Built by
-          ${{ github.actor }} via Universal Recovery Builder
-        files: /tmp/recovery/out/target/product/${{ env.DEVICE }}/*.img
-        draft: false
-        prerelease: true
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-    - name: Telegram Success
-      if: github.event.inputs.enable_telegram == 'true' && env.BUILD_STATUS == 'SUCCESS'
-      run: |
-        TG_CHAT="${{ secrets.TELEGRAM_CHAT_ID }}"
-        TG_TOKEN="${{ secrets.TELEGRAM_BOT_TOKEN }}"
-        if [ -z "$TG_CHAT" ] || [ -z "$TG_TOKEN" ]; then
-          echo "Telegram not configured"
-          exit 0
-        fi
-        USER="${{ github.event.inputs.telegram_username }}"
-        MENTION=""
-        if [ -n "$USER" ]; then
-          MENTION="%0A%40$USER"
-        fi
-        MSG="Build Complete:%0A%0ARecovery: ${{ github.event.inputs.recovery_type }}%0ADevice: ${{ env.DEVICE }}%0AAndroid: ${{ github.event.inputs.android_version }}%0ATarget: ${{ github.event.inputs.build_target }}%0AFiles: ${{ env.OUTPUT_FILES }}%0ABuilder: ${{ github.actor }}%0A%0ADownload: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}${MENTION}"
-        curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendMessage"           -d chat_id="$TG_CHAT" -d text="$MSG"
-
-    - name: Telegram Failure
-      if: github.event.inputs.enable_telegram == 'true' && env.BUILD_STATUS != 'SUCCESS'
-      run: |
-        TG_CHAT="${{ secrets.TELEGRAM_CHAT_ID }}"
-        TG_TOKEN="${{ secrets.TELEGRAM_BOT_TOKEN }}"
-        if [ -z "$TG_CHAT" ] || [ -z "$TG_TOKEN" ]; then
-          echo "Telegram not configured"
-          exit 0
-        fi
-        USER="${{ github.event.inputs.telegram_username }}"
-        MENTION=""
-        if [ -n "$USER" ]; then
-          MENTION="%0A%40$USER"
-        fi
-        MSG="Build Failed:%0A%0ARecovery: ${{ github.event.inputs.recovery_type }}%0ADevice: ${{ env.DEVICE }}%0AAndroid: ${{ github.event.inputs.android_version }}%0ATarget: ${{ github.event.inputs.build_target }}%0ABuilder: ${{ github.actor }}%0A%0ACheck Logs: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}${MENTION}"
-        curl -s -X POST "https://api.telegram.org/bot$TG_TOKEN/sendMessage"           -d chat_id="$TG_CHAT" -d text="$MSG"
-
-    - name: Build Summary
-      if: always()
-      run: |
-        echo "=========================================="
-        echo "  Universal Recovery Builder"
-        echo "=========================================="
-        echo "  Device: ${{ env.DEVICE }}"
-        echo "  Recovery: ${{ github.event.inputs.recovery_type }}"
-        echo "  Android: ${{ github.event.inputs.android_version }}"
-        echo "  Target: ${{ github.event.inputs.build_target }}"
-        echo "  Output: ${{ env.OUTPUT_FILES }}"
-        echo "  Status: ${{ env.BUILD_STATUS }}"
-        echo "=========================================="
+            Caution: This image is experimental and has not been device-tested by this workflow. Do not flash unless you understand the risks. If supported, test with fastboot boot first and keep a known-good stock firmware package available.
+          files: output/*.img
+          draft: false
+          prerelease: true
