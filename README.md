@@ -76,6 +76,24 @@ Just paste the Recovery Tree Git URL and get your custom recovery built privatel
 
 ---
 
+## 🧪 Local Launcher Dashboard
+
+This repository also ships a small dashboard (`launcher/`) for driving the workflow
+from a browser: it lists recent runs, shows each run's artifacts and dispatches new
+builds with the same inputs as the Actions form. It is a development tool — the
+build itself still runs on GitHub's runners.
+
+```bash
+docker compose -f docker-compose.base44.yml up -d --build
+# then open http://localhost:3000
+```
+
+Connect it to GitHub by setting a `GITHUB_TOKEN` secret with Actions read/write
+access to this repository. Without a token the dashboard still loads and shows a
+notice instead of the run list.
+
+---
+
 **Ready to build your recovery?**
 
 <p align="center">

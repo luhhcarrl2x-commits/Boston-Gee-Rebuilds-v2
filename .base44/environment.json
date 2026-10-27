@@ -1,0 +1,12 @@
+{
+  "previewPort": 3000,
+  "healthPath": "/",
+  "startCommand": "docker compose -f docker-compose.base44.yml up -d",
+  "secrets": [
+    {
+      "name": "GITHUB_TOKEN",
+      "description": "GitHub personal access token for the repository this app was imported from. Used by the launcher dashboard to list workflow runs, read artifacts and dispatch the 'Build SHRP Reborn' workflow. A classic PAT needs the 'repo' and 'workflow' scopes; a fine-grained PAT needs 'Actions: read and write' plus 'Contents: read' on this repository. Optional at boot: the dashboard starts, but shows a 'Token missing' notice until it is set.",
+      "requiredAtBoot": false
+    }
+  ]
+}

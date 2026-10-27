@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Recovery Builder Launcher</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <h1>Recovery Builder Launcher</h1>
+      <p class="subtitle" id="repo-line">Loading repository…</p>
+    </div>
+    <div class="topbar-actions">
+      <span class="pill neutral" id="token-pill">Checking token…</span>
+      <button type="button" class="btn ghost" id="refresh">Refresh runs</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="card notice" id="notice-card" hidden>
+      <h2>GitHub token needed</h2>
+      <p id="notice-text"></p>
+    </section>
+
+    <section class="card">
+      <h2>Dispatch a build</h2>
+      <p class="hint">
+        Starts <code>Build SHRP Reborn</code> on GitHub Actions. Runs execute on GitHub's
+        runners and can take hours; the recovery images land in the run's artifacts.
+      </p>
+      <form id="dispatch-form">
+        <div class="grid">
+          <label>
+            Device tree repository <span class="mono">owner/repo</span>
+            <input name="device_tree" value="PizzaG/android_device_motorola_boston" required autocomplete="off">
+          </label>
+          <label>
+            Device tree branch
+            <input name="device_branch" value="TWRP" required autocomplete="off">
+          </label>
+          <label>
+            Build target
+            <select name="build_target">
+              <option value="recoveryimage">recoveryimage</option>
+              <option value="bootimage">bootimage</option>
+              <option value="vendorbootimage">vendorbootimage</option>
+            </select>
+          </label>
+          <label>
+            Ref
+            <input name="ref" value="main" required autocomplete="off">
+          </label>
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn primary" id="dispatch">Start build</button>
+          <p class="status" id="dispatch-status" role="status"></p>
+        </div>
+      </form>
+    </section>
+
+    <section class="card">
+      <div class="card-head">
+        <h2>Recent runs</h2>
+        <p class="status" id="runs-status" role="status"></p>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Run</th>
+              <th>Branch</th>
+              <th>Status</th>
+              <th>Started</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="runs-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section class="card" id="artifacts-card" hidden>
+      <div class="card-head">
+        <h2 id="artifacts-title">Artifacts</h2>
+        <button type="button" class="btn ghost" id="close-artifacts">Close</button>
+      </div>
+      <ul class="artifacts" id="artifacts"></ul>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>

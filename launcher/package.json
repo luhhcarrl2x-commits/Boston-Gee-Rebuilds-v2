@@ -1,0 +1,14 @@
+{
+  "name": "recovery-builder-launcher",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local dashboard to dispatch and inspect the Custom Recovery Builder workflow",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

@@ -1,0 +1,50 @@
+# Base44 sandbox environment for the Custom Recovery Builder repo.
+#
+# This repository contains no web application: it is a GitHub Actions workflow
+# that builds Android recovery images on GitHub's runners. The `launcher`
+# service below is a small dashboard that lists those runs, shows their
+# artifacts and dispatches new builds, so the project has something to preview.
+#
+# It runs the checked-out source directly (bind mount + `node --watch`), so edits
+# under launcher/ show up without an image rebuild. No dependencies are
+# installed: the server uses the Node standard library only.
+#
+#   docker compose -f docker-compose.base44.yml up -d --build
+#   http://localhost:3000
+
+name: boston-gee-rebuilds
+
+services:
+  launcher:
+    image: node:22-slim
+    restart: on-failure
+    working_dir: /app
+    command: ["sh", "-ec", "exec node --watch server.js"]
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      # Read-only mount of the checkout, used to detect the GitHub repository
+      # from .git/config. Override with GH_REPO=owner/name if needed.
+      - REPO_ROOT=/repo
+    volumes:
+      - ./launcher:/app
+      - ./:/repo:ro
+    # Platform-managed secrets (never in the repo). The user's dashboard value
+    # always wins over anything set in `environment:`.
+    env_file:
+      - /run/base44/app.env
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/api/config').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    labels:
+      base44.project: "Recovery Builder Launcher"
+      base44.kind: "web"
+      base44.port: "3000"
